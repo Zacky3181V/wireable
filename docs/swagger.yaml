@@ -1,0 +1,9 @@
+basePath: /login
+host: localhost:8080
+info:
+  contact: {}
+  description: Checks the credentials and returns jwt
+  title: Login Handler
+  version: "1.0"
+paths: {}
+swagger: "2.0"

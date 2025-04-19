@@ -16,6 +16,13 @@ type Credentials struct {
 	Password string `json:"password"`
 }
 
+
+
+// @title JWT Generator
+// @version 1.0
+// @description Creates jwt key
+// @host localhost:8080
+// @BasePath /generate
 func generateJWT(username string) (string, error) {
 	// Create claims with expiration time
 	claims := jwt.MapClaims{
@@ -30,6 +37,11 @@ func generateJWT(username string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
+// @title Login Handler
+// @version 1.0
+// @description Checks the credentials and returns jwt
+// @host localhost:8080
+// @BasePath /login
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var creds Credentials
 
