@@ -16,7 +16,6 @@ func generateWireGuardKeys() (string, string, error) {
 		return "", "", err
 	}
 
-	// WireGuard private keys must have the lower 5 bits cleared.
 	privateKey[0] &= 248
 	privateKey[31] &= 127
 	privateKey[31] |= 64
@@ -24,12 +23,12 @@ func generateWireGuardKeys() (string, string, error) {
 	var publicKey [32]byte
 	curve25519.ScalarBaseMult(&publicKey, &privateKey)
 
-	// Encode to Base64 for WireGuard format
 	privateKeyB64 := base64.StdEncoding.EncodeToString(privateKey[:])
 	publicKeyB64 := base64.StdEncoding.EncodeToString(publicKey[:])
 
 	return privateKeyB64, publicKeyB64, nil
 }
+
 // @Summary Generate Wireguard configuration
 // @Description Generates a private and public key pair for WireGuard and returns a configuration template.
 // @ID wireguard-config
@@ -37,7 +36,7 @@ func generateWireGuardKeys() (string, string, error) {
 // @Produce text/plain
 // @Security BearerAuth
 // @Success 200 {string} string "WireGuard Configuration Template"
-// @Failure 500 
+// @Failure 500
 // @Router /generate [get]
 func WireGuardHandler(c *gin.Context) {
 	privateKey, publicKey, err := generateWireGuardKeys()
@@ -46,7 +45,6 @@ func WireGuardHandler(c *gin.Context) {
 		return
 	}
 
-	// WireGuard configuration template
 	configTemplate := fmt.Sprintf(`[Interface]
 PrivateKey = %s
 Address = 10.0.0.2/24
@@ -59,7 +57,6 @@ AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 `, privateKey, publicKey)
 
-	// Set the response content type and send the WireGuard config
 	c.Header("Content-Type", "text/plain")
 	c.String(200, configTemplate)
 }
