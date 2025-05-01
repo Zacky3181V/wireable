@@ -8,8 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	docs "github.com/Zacky3181V/wireable/docs"
-	swaggerfiles "github.com/swaggo/files"     // swagger embed files
-	ginSwagger "github.com/swaggo/gin-swagger" // gin-swagger middleware
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func setupRouter() *gin.Engine {

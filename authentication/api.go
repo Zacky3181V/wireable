@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	
 )
 
 var jwtSecret = []byte("supersecretkey")
@@ -17,7 +16,6 @@ type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
-
 
 func generateJWT(username string) (string, error) {
 	// Create claims with expiration time
@@ -39,7 +37,7 @@ func generateJWT(username string) (string, error) {
 // @Accept json
 // @Produce json
 // @Param loginRequest body Credentials true "Login credentials"
-// @Success 200 
+// @Success 200
 // @Router /authentication/login [post]
 func LoginHandler(c *gin.Context) {
 	var creds Credentials
@@ -65,7 +63,7 @@ func LoginHandler(c *gin.Context) {
 
 func JWTMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get the Authorization header
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing token"})
@@ -73,26 +71,22 @@ func JWTMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Extract the token from the header
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// Parse the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Ensure the signing method is what we expect (HS256)
+
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
 			}
 			return jwtSecret, nil
 		})
 
-		// If the token is invalid or there's an error parsing it
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
-		// Set the claims in the context for future use (like the username)
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
@@ -100,10 +94,8 @@ func JWTMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Store the username in context for access later in route handlers
 		c.Set("username", claims["username"])
 
-		// Continue processing the request
 		c.Next()
 	}
 }
