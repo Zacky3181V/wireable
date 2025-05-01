@@ -1,9 +1,59 @@
-basePath: /login
+definitions:
+  authentication.Credentials:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
-  description: Checks the credentials and returns jwt
-  title: Login Handler
+  description: Automation of Zero-Trust connection for Edge Locations
+  title: Wireable
   version: "1.0"
-paths: {}
+paths:
+  /authentication/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates the user and returns a JWT token.
+      operationId: login
+      parameters:
+      - description: Login credentials
+        in: body
+        name: loginRequest
+        required: true
+        schema:
+          $ref: '#/definitions/authentication.Credentials'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Login
+  /generate:
+    get:
+      consumes:
+      - application/json
+      description: Generates a private and public key pair for WireGuard and returns
+        a configuration template.
+      operationId: wireguard-config
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: WireGuard Configuration Template
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+      security:
+      - BearerAuth: []
+      summary: Generate Wireguard configuration
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
