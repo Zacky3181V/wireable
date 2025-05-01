@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/curve25519"
+
+	"github.com/Zacky3181V/wireable/config"
 )
 
 func generateWireGuardKeys() (string, string, error) {
@@ -40,14 +42,21 @@ func generateWireGuardKeys() (string, string, error) {
 // @Router /generate [get]
 func WireGuardHandler(c *gin.Context) {
 	privateKey, publicKey, err := generateWireGuardKeys()
+	wgAllocator := config.GetAllocator()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to generate keys"})
 		return
 	}
 
+	ip, err := wgAllocator.Allocate()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "No IPs available"})
+		return
+	}
+
 	configTemplate := fmt.Sprintf(`[Interface]
 PrivateKey = %s
-Address = 10.0.0.2/24
+Address = %s/24
 DNS = 1.1.1.1
 
 [Peer]
@@ -55,7 +64,7 @@ PublicKey = %s
 Endpoint = example.com:51820
 AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
-`, privateKey, publicKey)
+`, privateKey, ip, publicKey)
 
 	c.Header("Content-Type", "text/plain")
 	c.String(200, configTemplate)
