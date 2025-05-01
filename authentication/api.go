@@ -1,12 +1,14 @@
 package authentication
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	
 )
 
 var jwtSecret = []byte("supersecretkey")
@@ -17,12 +19,6 @@ type Credentials struct {
 }
 
 
-
-// @title JWT Generator
-// @version 1.0
-// @description Creates jwt key
-// @host localhost:8080
-// @BasePath /generate
 func generateJWT(username string) (string, error) {
 	// Create claims with expiration time
 	claims := jwt.MapClaims{
@@ -37,54 +33,77 @@ func generateJWT(username string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
-// @title Login Handler
-// @version 1.0
-// @description Checks the credentials and returns jwt
-// @host localhost:8080
-// @BasePath /login
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+// @Summary Login
+// @Description Authenticates the user and returns a JWT token.
+// @ID login
+// @Accept json
+// @Produce json
+// @Param loginRequest body Credentials true "Login credentials"
+// @Success 200 
+// @Router /authentication/login [post]
+func LoginHandler(c *gin.Context) {
 	var creds Credentials
 
-	err := json.NewDecoder(r.Body).Decode(&creds)
-	if err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&creds); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
 	if creds.Username != "admin" || creds.Password != "secret123" {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
 	token, err := generateJWT(creds.Username)
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		authHeader := r.Header.Get("Authorization")
+func JWTMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get the Authorization header
+		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Missing token", http.StatusUnauthorized)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing token"})
+			c.Abort()
 			return
 		}
 
+		// Extract the token from the header
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
+		// Parse the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Ensure the signing method is what we expect (HS256)
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
 			return jwtSecret, nil
 		})
 
+		// If the token is invalid or there's an error parsing it
 		if err != nil || !token.Valid {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
 			return
 		}
 
-		next(w, r)
+		// Set the claims in the context for future use (like the username)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		// Store the username in context for access later in route handlers
+		c.Set("username", claims["username"])
+
+		// Continue processing the request
+		c.Next()
 	}
 }

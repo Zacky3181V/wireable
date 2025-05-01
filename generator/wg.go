@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -30,11 +30,19 @@ func generateWireGuardKeys() (string, string, error) {
 
 	return privateKeyB64, publicKeyB64, nil
 }
-
-func WireGuardHandler(w http.ResponseWriter, r *http.Request) {
+// @Summary Generate Wireguard configuration
+// @Description Generates a private and public key pair for WireGuard and returns a configuration template.
+// @ID wireguard-config
+// @Accept json
+// @Produce text/plain
+// @Security BearerAuth
+// @Success 200 {string} string "WireGuard Configuration Template"
+// @Failure 500 
+// @Router /generate [get]
+func WireGuardHandler(c *gin.Context) {
 	privateKey, publicKey, err := generateWireGuardKeys()
 	if err != nil {
-		http.Error(w, "Failed to generate keys", http.StatusInternalServerError)
+		c.JSON(500, gin.H{"error": "Failed to generate keys"})
 		return
 	}
 
@@ -51,6 +59,7 @@ AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
 `, privateKey, publicKey)
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(configTemplate))
+	// Set the response content type and send the WireGuard config
+	c.Header("Content-Type", "text/plain")
+	c.String(200, configTemplate)
 }
