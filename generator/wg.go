@@ -1,34 +1,23 @@
 package generator
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
-
-	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/curve25519"
+	"os"
 
 	"github.com/Zacky3181V/wireable/config"
+	"github.com/gin-gonic/gin"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 func generateWireGuardKeys() (string, string, error) {
-	var privateKey [32]byte
-	_, err := rand.Read(privateKey[:])
+	privateKey, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
 		return "", "", err
 	}
 
-	privateKey[0] &= 248
-	privateKey[31] &= 127
-	privateKey[31] |= 64
+	publicKey := privateKey.PublicKey()
 
-	var publicKey [32]byte
-	curve25519.ScalarBaseMult(&publicKey, &privateKey)
-
-	privateKeyB64 := base64.StdEncoding.EncodeToString(privateKey[:])
-	publicKeyB64 := base64.StdEncoding.EncodeToString(publicKey[:])
-
-	return privateKeyB64, publicKeyB64, nil
+	return privateKey.String(), publicKey.String(), nil
 }
 
 // @Summary Generate Wireguard configuration
@@ -54,6 +43,13 @@ func WireGuardHandler(c *gin.Context) {
 		return
 	}
 
+	if err := appendPeerToFile("peers.conf", publicKey, ip); err != nil {
+		c.JSON(500, gin.H{"error": "Failed to update peers.conf"})
+		return
+	}
+
+	serverPublicKey := config.GetServerPublicKey()
+
 	configTemplate := fmt.Sprintf(`[Interface]
 PrivateKey = %s
 Address = %s/24
@@ -64,8 +60,25 @@ PublicKey = %s
 Endpoint = example.com:51820
 AllowedIPs = 0.0.0.0/0, ::/0
 PersistentKeepalive = 25
-`, privateKey, ip, publicKey)
+`, privateKey, ip, serverPublicKey)
 
 	c.Header("Content-Type", "text/plain")
 	c.String(200, configTemplate)
+}
+
+func appendPeerToFile(filename, publicKey, ip string) error {
+	entry := fmt.Sprintf(`
+[Peer]
+PublicKey = %s
+AllowedIPs = %s/32
+`, publicKey, ip)
+
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(entry)
+	return err
 }
