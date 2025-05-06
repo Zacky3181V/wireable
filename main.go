@@ -33,7 +33,33 @@ var (
 	serviceName  string
 	collectorURL string
 	insecure     string
+	enableTracing bool
 )
+
+func init() {
+	// Load environment variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	// Set global variables from env
+	serviceName = os.Getenv("SERVICE_NAME")
+	collectorURL = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	insecure = os.Getenv("INSECURE_MODE")
+
+	// Flag to control tracing initialization (can also be set in .env)
+	enableTracing = os.Getenv("ENABLE_TRACING") == "true"
+	if enableTracing{
+		log.Println("Tracing enabled")
+	} else {
+		log.Println("No tracing")
+	}
+	
+
+	// Initialize tracing only if the flag is enabled
+	
+}
 
 func initTracer() func(context.Context) error {
 
@@ -124,8 +150,11 @@ func setupRouter() *gin.Engine {
 // @name Authorization
 // @BasePath /api/v1/
 func main() {
-	cleanup := initTracer()
-	defer cleanup(context.Background())
+
+	if enableTracing {
+		cleanup := initTracer()
+		defer cleanup(context.Background())
+	}
 
 	fmt.Println("Hello World from Wireable!")
 	r := setupRouter()
