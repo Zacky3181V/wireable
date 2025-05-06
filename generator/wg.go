@@ -1,9 +1,11 @@
 package generator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"text/template"
 
 	"github.com/Zacky3181V/wireable/config"
 	"github.com/gin-gonic/gin"
@@ -13,6 +15,31 @@ import (
 )
 
 var tracer = otel.Tracer("wireguard-tracer")
+
+type ConfigData struct {
+	PrivateKey string
+	Address string 
+	ServerPublicKey string
+}
+
+func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, error) {
+	tmplBytes, err := os.ReadFile("./templates/client_template.conf")
+	if err != nil {
+		return "", err
+	}
+
+	tmpl, err := template.New("wg").Parse(string(tmplBytes))
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
 
 func generateWireGuardKeys(ctx context.Context) (string, string, error) {
 
@@ -69,17 +96,16 @@ func WireGuardHandler(c *gin.Context) {
 
 	serverPublicKey := config.GetServerPublicKey()
 
-	configTemplate := fmt.Sprintf(`[Interface]
-PrivateKey = %s
-Address = %s/24
-DNS = 1.1.1.1
+	configTemplate, err := generateConfigFromTemplate(ctx, ConfigData{
+		PrivateKey: privateKey,
+		Address: ip, 
+		ServerPublicKey: serverPublicKey,
+	})
 
-[Peer]
-PublicKey = %s
-Endpoint = example.com:51820
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25
-`, privateKey, ip, serverPublicKey)
+	if err != nil { 
+		span.RecordError(err)
+		c.JSON(500, gin.H{"error": "Failed to generate config"})
+	}
 
 	c.Header("Content-Type", "text/plain")
 	c.String(200, configTemplate)
