@@ -1,0 +1,15 @@
+meta {
+  name: /generate
+  type: http
+  seq: 3
+}
+
+get {
+  url: 127.0.0.1:8081/api/v1/generate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY1NTg4NjgsInVzZXJuYW1lIjoiYWRtaW4ifQ.ggxFmnXvuwYGyLijxavqInhQkhcrOBtrdTMY2JIpd_g
+}

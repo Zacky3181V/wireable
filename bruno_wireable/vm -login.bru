@@ -1,0 +1,18 @@
+meta {
+  name: vm /login
+  type: http
+  seq: 5
+}
+
+post {
+  url: 192.168.100.9/api/v1/authentication/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "username": "admin",
+    "password": "secret123"
+  }
+}
