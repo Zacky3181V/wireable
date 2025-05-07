@@ -23,7 +23,7 @@ type ConfigData struct {
 }
 
 func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, error) {
-	ctx, span := tracer.Start(ctx, "generateWireGuard keys")
+	ctx, span := tracer.Start(ctx, "generateConfigFromTemplate")
 	defer span.End()
 	tmplBytes, err := os.ReadFile("./templates/client_template.conf")
 	if err != nil {
@@ -45,10 +45,8 @@ func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, e
 
 func generateWireGuardKeys(ctx context.Context) (string, string, error) {
 
-	ctx, span := tracer.Start(ctx, "generateWireGuard keys")
+	ctx, span := tracer.Start(ctx, "generateWireGuardKeys")
 	defer span.End()
-
-	span.SetAttributes(attribute.Key("operations").String("generateWireGuardKeys"))
 
 	privateKey, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
