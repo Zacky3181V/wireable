@@ -17,12 +17,14 @@ import (
 var tracer = otel.Tracer("wireguard-tracer")
 
 type ConfigData struct {
-	PrivateKey string
-	Address string 
+	PrivateKey      string
+	Address         string
 	ServerPublicKey string
 }
 
 func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, error) {
+	ctx, span := tracer.Start(ctx, "generateWireGuard keys")
+	defer span.End()
 	tmplBytes, err := os.ReadFile("./templates/client_template.conf")
 	if err != nil {
 		return "", err
@@ -71,7 +73,7 @@ func generateWireGuardKeys(ctx context.Context) (string, string, error) {
 func WireGuardHandler(c *gin.Context) {
 
 	ctx, span := tracer.Start(c.Request.Context(), "WireGuardHandler")
-	defer span.End() 
+	defer span.End()
 
 	privateKey, publicKey, err := generateWireGuardKeys(ctx)
 	wgAllocator := config.GetAllocator()
@@ -97,12 +99,12 @@ func WireGuardHandler(c *gin.Context) {
 	serverPublicKey := config.GetServerPublicKey()
 
 	configTemplate, err := generateConfigFromTemplate(ctx, ConfigData{
-		PrivateKey: privateKey,
-		Address: ip, 
+		PrivateKey:      privateKey,
+		Address:         ip,
 		ServerPublicKey: serverPublicKey,
 	})
 
-	if err != nil { 
+	if err != nil {
 		span.RecordError(err)
 		c.JSON(500, gin.H{"error": "Failed to generate config"})
 	}
