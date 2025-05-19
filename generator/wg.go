@@ -3,7 +3,6 @@ package generator
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"text/template"
 
@@ -122,11 +121,36 @@ func appendPeerToFile(ctx context.Context, filename, publicKey, ip string) error
 		attribute.Key("ip").String(ip),
 	)
 
-	entry := fmt.Sprintf(`
-[Peer]
-PublicKey = %s
-AllowedIPs = %s/32
-`, publicKey, ip)
+	// Read the peer template
+	tmplBytes, err := os.ReadFile("./templates/peer.conf")
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	// Parse the template
+	tmpl, err := template.New("peer").Parse(string(tmplBytes))
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	// Prepare the data for the template
+	data := struct {
+		PublicKey string
+		Ip        string
+	}{
+		PublicKey: publicKey,
+		Ip:        ip,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	formatted := "\n" + buf.String() + "\n"
 
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -135,10 +159,10 @@ AllowedIPs = %s/32
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(entry)
-
-	if err != nil {
+	if _, err := file.WriteString(formatted); err != nil {
 		span.RecordError(err)
+		return err
 	}
-	return err
+
+	return nil
 }

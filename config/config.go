@@ -1,10 +1,9 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"os"
-
+	"text/template"
 	"github.com/Zacky3181V/wireable/allocator"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -77,16 +76,29 @@ func loadOrGenerateServerKeys() (wgtypes.Key, wgtypes.Key, bool, error) {
 }
 
 func writeInitialPeersFile(privateKey string) {
-	content := fmt.Sprintf(`[Interface]
-Address = 10.0.0.1/24
-PostUp = iptables -I FORWARD 1 -i wg0 -j ACCEPT; iptables -I FORWARD 1 -o wg0 -j ACCEPT; iptables -t nat -I POSTROUTING 1 -s 10.200.200.0/24 -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.200.200.0/24 -o eth0 -j MASQUERADE
-ListenPort = 51820
-PrivateKey = %s
-`, privateKey)
-
-	err := os.WriteFile("peers.conf", []byte(content), 0644)
-	if err != nil {
-		log.Fatalf("Failed to write peers.conf: %v", err)
+	tmplContent, err := os.ReadFile("./templates/server_template.conf")
+	if err!=nil{
+		log.Fatalf("Failed to read server template file %v", err)
 	}
+
+	tmpl, err := template.New("server").Parse(string(tmplContent))
+	if err != nil {
+		log.Fatalf("Failed to parse template: %v", err)
+	}
+
+	file, err := os.Create("peers.conf")
+	if err != nil {
+		log.Fatalf("Failed to create peers.conf: %v", err)
+	}
+	defer file.Close()
+
+	err = tmpl.Execute(file, struct {
+		PrivateKey string
+	}{
+		PrivateKey: privateKey,
+	})
+	if err != nil {
+		log.Fatalf("Failed to execute template: %v", err)
+	}
+
 }
