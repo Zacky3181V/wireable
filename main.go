@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"github.com/joho/godotenv"
 
+	"github.com/joho/godotenv"
 
 	"github.com/Zacky3181V/wireable/authentication"
 	"github.com/Zacky3181V/wireable/generator"
+	"github.com/Zacky3181V/wireable/vaultclient"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc/credentials"
 
@@ -30,35 +31,28 @@ import (
 )
 
 var (
-	serviceName  string
-	collectorURL string
-	insecure     string
+	serviceName   string
+	collectorURL  string
+	insecure      string
 	enableTracing bool
 )
 
 func init() {
-	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Set global variables from env
 	serviceName = os.Getenv("SERVICE_NAME")
 	collectorURL = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	insecure = os.Getenv("INSECURE_MODE")
 
-	// Flag to control tracing initialization (can also be set in .env)
 	enableTracing = os.Getenv("ENABLE_TRACING") == "true"
-	if enableTracing{
+	if enableTracing {
 		log.Println("Tracing enabled")
 	} else {
 		log.Println("No tracing")
 	}
-	
-
-	// Initialize tracing only if the flag is enabled
-	
 }
 
 func initTracer() func(context.Context) error {
@@ -78,7 +72,6 @@ func initTracer() func(context.Context) error {
 	if collectorURL == "" {
 		log.Fatal("ERROR: OTEL_EXPORTER_OTLP_ENDPOINT is not set")
 	}
-	
 
 	secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
 	if len(insecure) > 0 {
@@ -154,6 +147,11 @@ func main() {
 	if enableTracing {
 		cleanup := initTracer()
 		defer cleanup(context.Background())
+	}
+
+	_, err := vaultclient.InitClient()
+	if err!=nil{
+		log.Fatalf("Failed to initialize Vault client %v", err)
 	}
 
 	fmt.Println("Hello World from Wireable!")
