@@ -2,34 +2,33 @@ package authentication
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Zacky3181V/wireable/vaultclient"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var jwtSecret = []byte("supersecretkey")
 
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-func generateJWT(username string) (string, error) {
-	// Create claims with expiration time
+func generateJWT(username string, jwtSecret []byte) (string, error) {
 	claims := jwt.MapClaims{
 		"username": username,
-		"exp":      time.Now().Add(time.Hour * 1).Unix(), // Token expires in 1 hour
+		"exp":      time.Now().Add(time.Hour * 1).Unix(),
 	}
 
-	// Create token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Sign token with secret key
 	return token.SignedString(jwtSecret)
 }
+
+var jwtSecret string
 
 // @Summary Login
 // @Description Authenticates the user and returns a JWT token.
@@ -42,17 +41,25 @@ func generateJWT(username string) (string, error) {
 func LoginHandler(c *gin.Context) {
 	var creds Credentials
 
+	vc := vaultclient.GetClient()
+
+	jwtSecret = vaultclient.ProcessSecret(vc, "secret", "wireable/jwt", "jwtsecret")
+	username := vaultclient.ProcessSecret(vc, "secret", "wireable/credentials", "username")
+	password := vaultclient.ProcessSecret(vc, "secret", "wireable/credentials", "password")
+
+	fmt.Println(jwtSecret, username, password)
+
 	if err := c.ShouldBindJSON(&creds); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	if creds.Username != "admin" || creds.Password != "secret123" {
+	if creds.Username != username || creds.Password != password {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	token, err := generateJWT(creds.Username)
+	token, err := generateJWT(creds.Username, []byte(jwtSecret))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -78,7 +85,7 @@ func JWTMiddleware() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
 			}
-			return jwtSecret, nil
+			return []byte(jwtSecret), nil
 		})
 
 		if err != nil || !token.Valid {
