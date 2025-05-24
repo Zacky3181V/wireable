@@ -1,13 +1,16 @@
 package main
 
 import (
+	"container/heap"
 	"context"
-	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
+	"go.etcd.io/etcd/client/v3"
 
+	"github.com/Zacky3181V/wireable/allocator"
 	"github.com/Zacky3181V/wireable/authentication"
 	"github.com/Zacky3181V/wireable/generator"
 	"github.com/Zacky3181V/wireable/vaultclient"
@@ -143,18 +146,63 @@ func setupRouter() *gin.Engine {
 // @name Authorization
 // @BasePath /api/v1/
 func main() {
+	ctx := context.Background()
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"localhost:2379"}, // etcd endpoint
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect etcd: %v", err)
+	}
+	defer cli.Close()
+	log.Printf("Connected to etcd")
+
+	availableIPs, err := allocator.LoadAvailableIPs(ctx, cli)
+	if err != nil {
+		log.Fatalf("Failed to load available IPs: %v", err)
+	}
+	log.Printf("Loaded available IPs")
+
+	ipHeap := allocator.IPHeap(availableIPs)
+	heap.Init(&ipHeap)
+	log.Printf("Initizalied Heap")
+
+	go allocator.WatchAvailableIPs(ctx, cli, &ipHeap)
+	log.Printf("Watching for new available IPs added to etcd")
+
+	ip, err := allocator.AllocateIP(ctx, cli, &ipHeap, "node-1")
+	if err!=nil{
+		log.Fatalf("Failed to allocate IP")
+	}
+	log.Printf("Allocated IP %v", ip)
+	time.Sleep(10 * time.Second)
+
+	err = allocator.ReleaseIP(ctx, cli, ip)
+	if err != nil {
+		log.Fatalf("Failed to release IP: %v", err)
+	}
+	log.Printf("Released IP: %s\n", ip.String())
+
+
+	if err != nil {
+		log.Fatalf("Failed to allocate IP: %v", err)
+	}
+	log.Printf("Allocated IP: %s\n", ip.String())
 
 	if enableTracing {
 		cleanup := initTracer()
 		defer cleanup(context.Background())
 	}
 
-	_, err := vaultclient.InitClient()
+	_, err = vaultclient.InitClient()
 	if err!=nil{
 		log.Fatalf("Failed to initialize Vault client %v", err)
 	}
 
-	fmt.Println("Hello World from Wireable!")
+	log.Println("Hello World from Wireable!")
+
+
 	r := setupRouter()
 
 	r.Run(":8081")
