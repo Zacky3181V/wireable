@@ -164,6 +164,11 @@ func main() {
 		log.Fatalf("Failed to initialize Vault client %v", err)
 	}
 
+	err = vaultclient.InitSecrets()
+	if err != nil {
+		log.Fatalf("Failed to load secrets: %v", err)
+	}
+	log.Println("Secrets loaded")
 	log.Println("Hello World from Wireable!")
 
 	r := setupRouter()

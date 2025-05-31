@@ -2,7 +2,6 @@ package authentication
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -28,8 +27,6 @@ func generateJWT(username string, jwtSecret []byte) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
-var jwtSecret string
-
 // @Summary Login
 // @Description Authenticates the user and returns a JWT token.
 // @ID login
@@ -41,25 +38,17 @@ var jwtSecret string
 func LoginHandler(c *gin.Context) {
 	var creds Credentials
 
-	vc := vaultclient.GetClient()
-
-	jwtSecret = vaultclient.ProcessSecret(vc, "secret", "wireable/jwt", "jwtsecret")
-	username := vaultclient.ProcessSecret(vc, "secret", "wireable/credentials", "username")
-	password := vaultclient.ProcessSecret(vc, "secret", "wireable/credentials", "password")
-
-	fmt.Println(jwtSecret, username, password)
-
 	if err := c.ShouldBindJSON(&creds); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	if creds.Username != username || creds.Password != password {
+	if creds.Username != vaultclient.Username || creds.Password != vaultclient.Password {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	token, err := generateJWT(creds.Username, []byte(jwtSecret))
+	token, err := generateJWT(creds.Username, []byte(vaultclient.JWTSecret))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -85,7 +74,7 @@ func JWTMiddleware() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
 			}
-			return []byte(jwtSecret), nil
+			return []byte(vaultclient.JWTSecret), nil
 		})
 
 		if err != nil || !token.Valid {
