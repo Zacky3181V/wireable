@@ -105,7 +105,7 @@ func RemoveIPFromHeap(ipHeap *IPHeap, ip net.IP) {
 	}
 }
 
-func AllocateIP(ctx context.Context, cli *clientv3.Client, ipHeap *IPHeap, owner string) (net.IP, error) {
+func AllocateIP(ctx context.Context, cli *clientv3.Client, ipHeap *IPHeap, publicKey string) (net.IP, error) {
 	if ipHeap.Len() == 0 {
 		return nil, fmt.Errorf("no available IPs")
 	}
@@ -119,7 +119,7 @@ func AllocateIP(ctx context.Context, cli *clientv3.Client, ipHeap *IPHeap, owner
 	txnResp, err := txn.If(clientv3.Compare(clientv3.Version(availKey), ">", 0)).
 		Then(
 			clientv3.OpDelete(availKey),
-			clientv3.OpPut(takeKey, owner),
+			clientv3.OpPut(takeKey, publicKey),
 		).
 		Commit()
 

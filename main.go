@@ -1,17 +1,15 @@
 package main
 
 import (
-	"container/heap"
 	"context"
 	"log"
 	"os"
-	"time"
 
 	"github.com/joho/godotenv"
-	"go.etcd.io/etcd/client/v3"
 
 	"github.com/Zacky3181V/wireable/allocator"
 	"github.com/Zacky3181V/wireable/authentication"
+	"github.com/Zacky3181V/wireable/config"
 	"github.com/Zacky3181V/wireable/generator"
 	"github.com/Zacky3181V/wireable/vaultclient"
 	"github.com/gin-gonic/gin"
@@ -146,49 +144,15 @@ func setupRouter() *gin.Engine {
 // @name Authorization
 // @BasePath /api/v1/
 func main() {
+	var err error
 	ctx := context.Background()
 
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{"localhost:2379"}, // etcd endpoint
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		log.Fatalf("Failed to connect etcd: %v", err)
+	if err := config.InitEtcdAndHeap(ctx); err != nil {
+		log.Fatalf("Failed to initialize etcd and IP heap: %v", err)
 	}
-	defer cli.Close()
-	log.Printf("Connected to etcd")
 
-	availableIPs, err := allocator.LoadAvailableIPs(ctx, cli)
-	if err != nil {
-		log.Fatalf("Failed to load available IPs: %v", err)
-	}
-	log.Printf("Loaded available IPs")
-
-	ipHeap := allocator.IPHeap(availableIPs)
-	heap.Init(&ipHeap)
-	log.Printf("Initizalied Heap")
-
-	go allocator.WatchAvailableIPs(ctx, cli, &ipHeap)
+	go allocator.WatchAvailableIPs(ctx, config.GetEtcdClient(), config.GetIPHeap())
 	log.Printf("Watching for new available IPs added to etcd")
-
-	ip, err := allocator.AllocateIP(ctx, cli, &ipHeap, "node-1")
-	if err!=nil{
-		log.Fatalf("Failed to allocate IP")
-	}
-	log.Printf("Allocated IP %v", ip)
-	time.Sleep(10 * time.Second)
-
-	err = allocator.ReleaseIP(ctx, cli, ip)
-	if err != nil {
-		log.Fatalf("Failed to release IP: %v", err)
-	}
-	log.Printf("Released IP: %s\n", ip.String())
-
-
-	if err != nil {
-		log.Fatalf("Failed to allocate IP: %v", err)
-	}
-	log.Printf("Allocated IP: %s\n", ip.String())
 
 	if enableTracing {
 		cleanup := initTracer()
@@ -196,12 +160,11 @@ func main() {
 	}
 
 	_, err = vaultclient.InitClient()
-	if err!=nil{
+	if err != nil {
 		log.Fatalf("Failed to initialize Vault client %v", err)
 	}
 
 	log.Println("Hello World from Wireable!")
-
 
 	r := setupRouter()
 
