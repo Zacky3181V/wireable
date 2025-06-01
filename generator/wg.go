@@ -13,7 +13,6 @@ import (
 	"github.com/Zacky3181V/wireable/config"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -26,7 +25,7 @@ type ConfigData struct {
 }
 
 func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, error) {
-	ctx, span := tracer.Start(ctx, "generateConfigFromTemplate")
+	_, span := tracer.Start(ctx, "generateConfigFromTemplate")
 	defer span.End()
 	tmplBytes, err := os.ReadFile("./templates/client_template.conf")
 	if err != nil {
@@ -48,7 +47,7 @@ func generateConfigFromTemplate(ctx context.Context, data ConfigData) (string, e
 
 func generateWireGuardKeys(ctx context.Context) (string, string, error) {
 
-	ctx, span := tracer.Start(ctx, "generateWireGuardKeys")
+	_, span := tracer.Start(ctx, "generateWireGuardKeys")
 	defer span.End()
 
 	privateKey, err := wgtypes.GeneratePrivateKey()
@@ -103,7 +102,7 @@ func WireGuardHandler(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to generate config"})
 		return
 	}
-	err = addWireguardPeer(ip.String(), publicKey)
+	err = addWireguardPeer(ctx, ip.String(), publicKey)
 	if err != nil {
 		span.RecordError(err)
 		c.JSON(500, gin.H{"error": "Failed to add wireguard peer"})
@@ -115,7 +114,8 @@ func WireGuardHandler(c *gin.Context) {
 
 }
 
-func addWireguardPeer(ip string, publicKey string) error {
+func addWireguardPeer(ctx context.Context, ip string, publicKey string) error {
+	_, span := tracer.Start(ctx, "addWireguardPeer")
 	interfaceName := "wg0"
 	allowedIPs := fmt.Sprintf("%s/32", ip)
 
@@ -127,6 +127,7 @@ func addWireguardPeer(ip string, publicKey string) error {
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("failed to add WireGuard peer: %v\nOutput: %s", err, string(output))
 	}
 
