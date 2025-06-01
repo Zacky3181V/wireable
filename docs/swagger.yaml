@@ -6,7 +6,7 @@ definitions:
       username:
         type: string
     type: object
-host: localhost:8080
+host: localhost:8081
 info:
   contact: {}
   description: Automation of Zero-Trust connection for Edge Locations

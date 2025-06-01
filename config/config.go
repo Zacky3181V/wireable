@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	wgAllocator        *allocator.IPAllocator
 	serverPrivateKey   wgtypes.Key
 	serverPublicKey    wgtypes.Key
 	privateKeyFile     = "server_private.key"
@@ -27,11 +26,6 @@ var (
 
 func init() {
 	var err error
-	wgAllocator, err = allocator.NewIPAllocator("10.0.0.0/24")
-	if err != nil {
-		log.Fatalf("Failed to initialize IPAllocator: %v", err)
-	}
-	log.Println("IPAllocator initialized successfully.")
 
 	serverPrivateKey, serverPublicKey, wasKeyGeneratedNow, err = loadOrGenerateServerKeys()
 	if err != nil {
@@ -40,11 +34,22 @@ func init() {
 	log.Println("WireGuard server keys initialized.")
 
 	if wasKeyGeneratedNow {
-		log.Println("New WireGuard private key generated. Creating fresh server config")
+		log.Println("New WireGuard private key generated. Creating fresh server config.")
 		writeInitialPeersFile(serverPrivateKey.String())
 	} else {
-		log.Println("Using existing WireGuard private key. Skipping config rewrite")
+		log.Println("Using existing WireGuard private key. Checking if config file is present.")
+
+		if _, err := os.Stat("peers.conf"); os.IsNotExist(err) {
+			log.Println("peers.conf does not exist. Creating it now.")
+			writeInitialPeersFile(serverPrivateKey.String())
+		} else if err != nil {
+			log.Fatalf("Error checking peers.conf: %v", err)
+		} else {
+			log.Println("Config file found. All good.")
+		}
 	}
+
+	
 }
 
 func InitEtcdAndHeap(ctx context.Context) error {
@@ -80,16 +85,8 @@ func GetIPHeap() *allocator.IPHeap {
 	return &ipHeap
 }
 
-func GetAllocator() *allocator.IPAllocator {
-	return wgAllocator
-}
-
 func GetServerPublicKey() string {
 	return serverPublicKey.String()
-}
-
-func GetServerPrivateKey() string {
-	return serverPrivateKey.String()
 }
 
 func loadOrGenerateServerKeys() (wgtypes.Key, wgtypes.Key, bool, error) {
