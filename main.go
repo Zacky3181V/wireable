@@ -3,12 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/joho/godotenv"
 
@@ -191,37 +187,6 @@ func main() {
 
 	r := setupRouter()
 
-	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: r,
-	}
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Gin server error: %v", err)
-		}
-	}()
+	r.Run(":8081")
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down server...")
-
-	// Give server 5 seconds to shut down
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	// Bring down WireGuard
-	cmdDown := exec.Command("wg-quick", "down", "peers")
-	if err := cmdDown.Run(); err != nil {
-		log.Printf("Failed to bring down WireGuard interface: %v", err)
-	} else {
-		log.Println("WireGuard interface brought down successfully.")
-	}
-
-	
 }

@@ -116,11 +116,11 @@ func WireGuardHandler(c *gin.Context) {
 
 func addWireguardPeer(ctx context.Context, ip string, publicKey string) error {
 	_, span := tracer.Start(ctx, "addWireguardPeer")
-	interfaceName := "wg0"
+	interfaceName := "peers"
 	allowedIPs := fmt.Sprintf("%s/32", ip)
 
 	cmd := exec.Command(
-		"sudo", "wg", "set", interfaceName,
+		"wg", "set", interfaceName,
 		"peer", publicKey,
 		"allowed-ips", allowedIPs,
 	)
