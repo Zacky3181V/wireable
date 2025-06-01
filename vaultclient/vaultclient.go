@@ -12,6 +12,12 @@ import (
 var (
 	client     *api.Client
 	clientOnce sync.Once
+
+	JWTSecret string
+	Username  string
+	Password  string
+
+	secretsOnce sync.Once
 )
 
 func InitClient() (*api.Client, error) {
@@ -65,4 +71,51 @@ func ProcessSecret(vc *api.Client, mountPath string, secretName string, key stri
     }
 
     return ""
+}
+
+func InitSecrets() error {
+	var err error
+	secretsOnce.Do(func() {
+		vc, e := InitClient()
+		if e != nil {
+			err = e
+			return
+		}
+
+		mountPath := os.Getenv("MOUNT_PATH")
+		jwtSecretPath := os.Getenv("JWT_SECRET")
+		jwtSecretKey := os.Getenv("JWT_SECRET_KEY")
+		credsSecretPath := os.Getenv("CREDS_SECRET")
+		usernameKey := os.Getenv("USERNAME_SECRET_KEY")
+		passwordKey := os.Getenv("PASSWORD_SECRET_KEY")
+
+		if mountPath == "" || jwtSecretPath == "" || jwtSecretKey == "" ||
+			credsSecretPath == "" || usernameKey == "" || passwordKey == "" {
+			err =  logError("One or more required environment variables are empty")
+			return
+		}
+
+		JWTSecret = ProcessSecret(vc, mountPath, jwtSecretPath, jwtSecretKey)
+		Username = ProcessSecret(vc, mountPath, credsSecretPath, usernameKey)
+		Password = ProcessSecret(vc, mountPath, credsSecretPath, passwordKey)
+
+		if JWTSecret == "" || Username == "" || Password == "" {
+			err = logError("Failed to load one or more secrets from Vault")
+			return
+		}
+	})
+	return err
+}
+
+func logError(msg string) error {
+	log.Println(msg)
+	return &customError{msg}
+}
+
+type customError struct {
+	msg string
+}
+
+func (e *customError) Error() string {
+	return e.msg
 }

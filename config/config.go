@@ -1,10 +1,16 @@
 package config
 
 import (
+	"container/heap"
+	"context"
 	"log"
 	"os"
+	"sync"
 	"text/template"
+	"time"
+
 	"github.com/Zacky3181V/wireable/allocator"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
@@ -14,6 +20,9 @@ var (
 	serverPublicKey    wgtypes.Key
 	privateKeyFile     = "server_private.key"
 	wasKeyGeneratedNow bool
+	ipHeap             allocator.IPHeap
+	etcdClient *clientv3.Client
+	once               sync.Once
 )
 
 func init() {
@@ -36,6 +45,39 @@ func init() {
 	} else {
 		log.Println("Using existing WireGuard private key. Skipping config rewrite")
 	}
+}
+
+func InitEtcdAndHeap(ctx context.Context) error {
+	var err error
+	once.Do(func() {
+		etcdClient, err = clientv3.New(clientv3.Config{
+			Endpoints:   []string{os.Getenv("ETCD_ENDPOINT")},
+			DialTimeout: 5 * time.Second,
+		})
+		if err != nil {
+			return
+		}
+		log.Println("Connected to etcd")
+
+		availableIPs, err := allocator.LoadAvailableIPs(ctx, etcdClient)
+		if err != nil {
+			log.Fatalf("Failed to load available IPs: %v", err)
+		}
+		log.Printf("Loaded available IPs from etcd")
+
+		ipHeap = allocator.IPHeap(availableIPs)
+		heap.Init(&ipHeap)
+		log.Println("Initialized IP Heap")
+	})
+	return err
+}
+
+func GetEtcdClient() *clientv3.Client {
+	return etcdClient
+}
+
+func GetIPHeap() *allocator.IPHeap {
+	return &ipHeap
 }
 
 func GetAllocator() *allocator.IPAllocator {
@@ -77,7 +119,7 @@ func loadOrGenerateServerKeys() (wgtypes.Key, wgtypes.Key, bool, error) {
 
 func writeInitialPeersFile(privateKey string) {
 	tmplContent, err := os.ReadFile("./templates/server_template.conf")
-	if err!=nil{
+	if err != nil {
 		log.Fatalf("Failed to read server template file %v", err)
 	}
 

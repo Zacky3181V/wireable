@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
 
+	"github.com/Zacky3181V/wireable/allocator"
 	"github.com/Zacky3181V/wireable/authentication"
+	"github.com/Zacky3181V/wireable/config"
 	"github.com/Zacky3181V/wireable/generator"
 	"github.com/Zacky3181V/wireable/vaultclient"
 	"github.com/gin-gonic/gin"
@@ -143,18 +144,33 @@ func setupRouter() *gin.Engine {
 // @name Authorization
 // @BasePath /api/v1/
 func main() {
+	var err error
+	ctx := context.Background()
+
+	if err := config.InitEtcdAndHeap(ctx); err != nil {
+		log.Fatalf("Failed to initialize etcd and IP heap: %v", err)
+	}
+
+	go allocator.WatchAvailableIPs(ctx, config.GetEtcdClient(), config.GetIPHeap())
+	log.Printf("Watching for new available IPs added to etcd")
 
 	if enableTracing {
 		cleanup := initTracer()
 		defer cleanup(context.Background())
 	}
 
-	_, err := vaultclient.InitClient()
-	if err!=nil{
+	_, err = vaultclient.InitClient()
+	if err != nil {
 		log.Fatalf("Failed to initialize Vault client %v", err)
 	}
 
-	fmt.Println("Hello World from Wireable!")
+	err = vaultclient.InitSecrets()
+	if err != nil {
+		log.Fatalf("Failed to load secrets: %v", err)
+	}
+	log.Println("Secrets loaded")
+	log.Println("Hello World from Wireable!")
+
 	r := setupRouter()
 
 	r.Run(":8081")

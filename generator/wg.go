@@ -3,9 +3,13 @@ package generator
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"text/template"
 
+	"github.com/Zacky3181V/wireable/allocator"
 	"github.com/Zacky3181V/wireable/config"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
@@ -73,23 +77,16 @@ func WireGuardHandler(c *gin.Context) {
 	defer span.End()
 
 	privateKey, publicKey, err := generateWireGuardKeys(ctx)
-	wgAllocator := config.GetAllocator()
 	if err != nil {
 		span.RecordError(err)
 		c.JSON(500, gin.H{"error": "Failed to generate keys"})
 		return
 	}
 
-	ip, err := wgAllocator.Allocate()
-	if err != nil {
-		span.RecordError(err)
-		c.JSON(500, gin.H{"error": "No IPs available"})
-		return
-	}
+	ip, err := allocator.AllocateIP(ctx, config.GetEtcdClient(), config.GetIPHeap(), publicKey)
 
-	if err := appendPeerToFile(ctx, "peers.conf", publicKey, ip); err != nil {
-		span.RecordError(err)
-		c.JSON(500, gin.H{"error": "Failed to update peers.conf"})
+	if err != nil {
+		log.Fatalf("Failed to allocate IP")
 		return
 	}
 
@@ -97,17 +94,43 @@ func WireGuardHandler(c *gin.Context) {
 
 	configTemplate, err := generateConfigFromTemplate(ctx, ConfigData{
 		PrivateKey:      privateKey,
-		Address:         ip,
+		Address:         ip.String(),
 		ServerPublicKey: serverPublicKey,
 	})
 
 	if err != nil {
 		span.RecordError(err)
 		c.JSON(500, gin.H{"error": "Failed to generate config"})
+		return
+	}
+	err = addWireguardPeer(ip.String(), publicKey)
+	if err !=nil{
+		span.RecordError(err)
+		c.JSON(500, gin.H{"error": "Failed to add wireguard peer"})
+		return
 	}
 
 	c.Header("Content-Type", "text/plain")
 	c.String(200, configTemplate)
+
+}
+
+func addWireguardPeer(ip string, publicKey string) error { 
+	interfaceName := "wg0"
+	allowedIPs := fmt.Sprintf("%s/32", ip)
+
+	cmd := exec.Command(
+		"sudo", "wg", "set", interfaceName,
+		"peer", publicKey,
+		"allowed-ips", allowedIPs,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to add WireGuard peer: %v\nOutput: %s", err, string(output))
+	}
+
+	return nil
 }
 
 func appendPeerToFile(ctx context.Context, filename, publicKey, ip string) error {
