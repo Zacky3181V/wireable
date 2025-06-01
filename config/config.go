@@ -48,8 +48,6 @@ func init() {
 			log.Println("Config file found. All good.")
 		}
 	}
-
-	
 }
 
 func InitEtcdAndHeap(ctx context.Context) error {
