@@ -138,7 +138,7 @@ func setupRouter() *gin.Engine {
 // @title Wireable
 // @version 1.0
 // @description Automation of Zero-Trust connection for Edge Locations
-// @host localhost:8080
+// @host localhost:8081
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
