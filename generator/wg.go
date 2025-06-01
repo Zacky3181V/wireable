@@ -104,7 +104,7 @@ func WireGuardHandler(c *gin.Context) {
 		return
 	}
 	err = addWireguardPeer(ip.String(), publicKey)
-	if err !=nil{
+	if err != nil {
 		span.RecordError(err)
 		c.JSON(500, gin.H{"error": "Failed to add wireguard peer"})
 		return
@@ -115,7 +115,7 @@ func WireGuardHandler(c *gin.Context) {
 
 }
 
-func addWireguardPeer(ip string, publicKey string) error { 
+func addWireguardPeer(ip string, publicKey string) error {
 	interfaceName := "wg0"
 	allowedIPs := fmt.Sprintf("%s/32", ip)
 
@@ -128,63 +128,6 @@ func addWireguardPeer(ip string, publicKey string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to add WireGuard peer: %v\nOutput: %s", err, string(output))
-	}
-
-	return nil
-}
-
-func appendPeerToFile(ctx context.Context, filename, publicKey, ip string) error {
-
-	ctx, span := tracer.Start(ctx, "appendPeerToFile")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.Key("filename").String(filename),
-		attribute.Key("publicKey").String(publicKey),
-		attribute.Key("ip").String(ip),
-	)
-
-	// Read the peer template
-	tmplBytes, err := os.ReadFile("./templates/peer.conf")
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-
-	// Parse the template
-	tmpl, err := template.New("peer").Parse(string(tmplBytes))
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-
-	// Prepare the data for the template
-	data := struct {
-		PublicKey string
-		Ip        string
-	}{
-		PublicKey: publicKey,
-		Ip:        ip,
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		span.RecordError(err)
-		return err
-	}
-
-	formatted := "\n" + buf.String() + "\n"
-
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-	defer file.Close()
-
-	if _, err := file.WriteString(formatted); err != nil {
-		span.RecordError(err)
-		return err
 	}
 
 	return nil
