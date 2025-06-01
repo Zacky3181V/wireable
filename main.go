@@ -3,7 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -169,9 +174,54 @@ func main() {
 		log.Fatalf("Failed to load secrets: %v", err)
 	}
 	log.Println("Secrets loaded")
+
+	cmd := exec.Command("cp", "peers.conf", "/etc/wireguard/peers.conf")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("Failed to move WireGuard config to /etc/wireguard: %v\nOutput: %s", err, output)
+	}
+
+	cmdUp := exec.Command("wg-quick", "up", "peers")
+	output, err = cmdUp.CombinedOutput()
+	if err != nil {
+		log.Fatalf("Failed to move WireGuard config to /etc/wireguard: %v\nOutput: %s", err, output)
+	}
+	log.Println("WireGuard interface is up")
 	log.Println("Hello World from Wireable!")
 
 	r := setupRouter()
 
-	r.Run(":8081")
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Gin server error: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	// Give server 5 seconds to shut down
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	// Bring down WireGuard
+	cmdDown := exec.Command("wg-quick", "down", "peers")
+	if err := cmdDown.Run(); err != nil {
+		log.Printf("Failed to bring down WireGuard interface: %v", err)
+	} else {
+		log.Println("WireGuard interface brought down successfully.")
+	}
+
+	
 }
